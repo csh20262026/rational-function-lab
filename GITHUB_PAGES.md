@@ -17,6 +17,9 @@ index.html
 style.css
 app.js
 math.js
+progress.js
+submission.js
+SUBMISSION_SETUP.md
 README.md
 GITHUB_PAGES.md
 tools/
@@ -26,6 +29,8 @@ tests/
   browser.test.cjs
   lab-checks.cjs
   math.test.cjs
+  progress.test.cjs
+  completion.test.cjs
   mission-layout.test.cjs
   preview.test.cjs
   visual.test.cjs
@@ -77,3 +82,5 @@ python3 tools/build.py --check
 Windows에서는 `python3` 대신 `py`를 사용할 수 있습니다. 바뀐 원본과 생성된 `index.html`을 같은 방식으로 main에 올리면 다시 배포됩니다. GitHub Pages에서 빌드 도구를 따로 실행할 필요는 없습니다.
 
 완성 HTML 안에는 절대 경로로 된 CSS·JavaScript 주소가 없으므로 `/rational-function-lab/` 하위 경로에서도 작동합니다. 코드의 `http://www.w3.org/2000/svg`는 SVG 연결선의 네임스페이스 이름이며 네트워크로 라이브러리를 받는 주소가 아닙니다. Preview 파일이 아닌 최상위 `index.html`을 배포하세요.
+
+현재 버전의 제목은 **유리함수 그래프 탐구 초당LAB**입니다. 갱신 시 `progress.js`, `submission.js`와 생성된 `index.html`도 함께 반영하세요. 전송 주소는 비어 있으며 Apps Script 연결은 다음 단계입니다. 학습 기록은 브라우저에 저장하고 학번·이름은 저장하지 않습니다. 자세한 내용은 [SUBMISSION_SETUP.md](SUBMISSION_SETUP.md)를 참고하세요.

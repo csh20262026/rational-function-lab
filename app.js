@@ -1,11 +1,14 @@
 const M=LabMath,$=id=>document.getElementById(id);
+let learningStorage=null;try{learningStorage=window.localStorage;}catch{}
+const progress=LabProgress.createStore(learningStorage);
+let completionNotified=false,submitting=false;
 const missions=[
  {name:'기본',target:M.makeMission(-2,3,-1,5)},
  {name:'응용',target:M.makeMission(1,-2,3,-3)},
  {name:'도전',target:M.makeMission(-1,2,1,-1)}
 ];
 let missionIndex=0,target=missions[0].target;
-const completed=missions.map(()=>false);
+const completed=progress.missions;
 let successTimer=null;
 function aValues(){return activity===3?M.MISSION_A_VALUES:M.A_VALUES;}
 const activities=[
@@ -57,12 +60,12 @@ function selectActivity(i){
  [...$('activities').children].forEach((b,n)=>{b.classList.toggle('active',n===i);b.setAttribute('aria-pressed',n===i);});
  $('step').textContent=`0${i+1}`;$('activityTitle').textContent=activities[i].title;$('question').textContent=activities[i].prompt;
  $('quizTitle').textContent=`활동 ${i+1} · ${activities[i].title} — 객관식 탐구`;
- $('quizGuide').textContent='그래프를 충분히 관찰한 뒤 각 문항에서 답 하나를 선택하세요. 계수를 바꾸면 현재 그래프에 맞게 문제와 답안이 초기화됩니다.';
+ $('quizGuide').textContent='그래프를 충분히 관찰한 뒤 답을 선택하고 정답 확인하기를 누르세요. 계수를 바꾸면 선택은 초기화되지만 이미 확인한 정답의 완료 기록은 유지됩니다.';
  $('compare').checked=i===1;$('missionPanel').hidden=i!==3;solutionOpen=false;
  $('missionFeedback').hidden=true;$('missionSolution').hidden=true;
  $('controlHint').textContent=`이 활동의 기본값 a = ${a}, p = ${p}, q = ${q}${i===0?' · p, q는 고정':''}`;
  $('coordinate').textContent='그래프 위를 가리켜 좌표를 확인하세요';
- resetView();resetQuiz();if(i===3){renderMissionControls();renderMission();}sync();
+ resetView();resetQuiz();if(i===3){renderMissionControls();renderMission();}sync();updateLearningStatus();
 }
 function question(title,correct,distractors,explain,index){
  const options=[...new Set(distractors)].filter(x=>x!==correct).slice(0,3);
@@ -103,6 +106,7 @@ function resetQuiz(){
  questions.forEach((item,i)=>{
    const card=document.createElement('article');card.className='quiz-card';
    const field=document.createElement('fieldset'),legend=document.createElement('legend');legend.textContent=`0${i+1}  ${item.title}`;field.append(legend);
+   const mark=document.createElement('span');mark.className='question-complete';mark.textContent='완료 ✓';mark.hidden=!progress.isQuestionDone(activity,missionIndex,i);legend.append(mark);
    item.options.forEach((text,j)=>{
      const label=document.createElement('label');label.className='answer-option';
      const input=document.createElement('input');input.type='radio';input.name=`quiz-${i}`;input.value=j;
@@ -117,6 +121,7 @@ function resetQuiz(){
      feedback.textContent=`${ok?'정답입니다!':'다시 살펴보세요.'} 정답: ${item.options[item.correct]}. ${item.explain}`;
      feedback.hidden=false;card.classList.toggle('correct',ok);card.classList.toggle('incorrect',!ok);
      $('asymptotes').disabled=false;$('asymptotes').checked=true;$('locked').hidden=true;draw();
+     if(ok){progress.markQuestion(activity,missionIndex,i);mark.hidden=false;}updateLearningStatus();
    };
    card.append(field,button,feedback);$('quizCards').append(card);
  });
@@ -153,14 +158,14 @@ function showSolution(){
  $('missionSolution').hidden=false;
 }
 function celebrate(){
- completed[missionIndex]=true;
+ progress.markMission(missionIndex);
  $('successOverlay').hidden=false;
  const shownMission=missionIndex;
  successTimer=setTimeout(()=>{
    successTimer=null;$('successOverlay').hidden=true;
    if(activity===3&&missionIndex===shownMission)renderMissionControls();
  },1000);
- renderMissionControls();
+ renderMissionControls();updateLearningStatus();
 }
 function renderMission(){
  const result=M.checkMission(a,p,q,target),messages=[];
@@ -175,7 +180,7 @@ function renderMission(){
 $('checkMission').onclick=renderMission;
 $('showSolution').onclick=showSolution;
 $('nextMission').onclick=()=>{if(!$('nextMission').disabled)selectMission(missionIndex+1);};
-$('restartChallenge').onclick=()=>{cancelSuccess();completed.fill(false);selectMission(0);};
+$('restartChallenge').onclick=()=>{if(submitting)return;cancelSuccess();progress.restartMissions();selectMission(0);updateLearningStatus();};
 // Labels live in an overlay so their bounds can be measured and kept inside
 // the plot. Only annotations move; every mathematical coordinate stays fixed.
 let graphLabels=[],labelObstacles=[],curvePixels=[];
@@ -264,4 +269,46 @@ function inspect(e){const r=canvas.getBoundingClientRect(),pt=M.toWorld(e.client
 canvas.onpointerdown=e=>{if(drag)return;drag={id:e.pointerId,x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);inspect(e);};
 canvas.onpointermove=e=>{if(drag&&drag.id===e.pointerId){v.cx-=(e.clientX-drag.x)/v.scale;v.cy+=(e.clientY-drag.y)/v.scale;v.cx=Math.max(-10000,Math.min(10000,v.cx));v.cy=Math.max(-10000,Math.min(10000,v.cy));drag={id:e.pointerId,x:e.clientX,y:e.clientY};draw();}inspect(e);};
 canvas.onpointerup=canvas.onpointercancel=e=>{if(drag?.id===e.pointerId)drag=null;};
-selectActivity(0);sync();resize();
+function updateLearningStatus(){
+ const counts=progress.counts(),done=progress.allComplete();
+ $('learningProgress').textContent=`이 브라우저의 학습 기록 · 객관식 ${counts.questions}/18문항 완료 · 그래프 미션 ${counts.missions}/3개 완료`;
+ $('storageNotice').hidden=progress.storageAvailable;
+ [...$('activities').children].forEach((button,i)=>{button.classList.toggle('activity-complete',progress.activityDone(i));});
+ $('reopenCompletion').hidden=!done;
+ if(!done)completionNotified=false;
+ if(done&&!completionNotified&&!progress.submission()?.confirmed){completionNotified=true;openCompletion();}
+}
+function refreshSubmission(){
+ const sent=progress.submission()?.confirmed===true,configured=LabSubmission.isConfigured();
+ const valid=LabSubmission.validIdentity($('studentNumber').value.trim(),$('studentName').value.trim());
+ $('sendCompletion').disabled=!progress.allComplete()||!valid||!configured||submitting||sent;
+ $('studentNumber').disabled=$('studentName').disabled=submitting||sent;
+ $('closeCompletion').disabled=submitting;$('resetLearning').disabled=submitting;$('restartChallenge').disabled=submitting;
+ if(sent)$('submissionStatus').textContent='서버의 저장 확인을 받은 제출입니다. 중복 전송하지 않습니다.';
+ else if(!configured)$('submissionStatus').textContent='전송 연결 준비 중입니다. 선생님 전송 주소가 없어 전송할 수 없습니다. 학번과 이름은 저장되지 않습니다.';
+}
+function openCompletion(){
+ if(!progress.allComplete())return;
+ $('completionForm').reset();refreshSubmission();
+ if(!$('completionDialog').open)$('completionDialog').showModal();
+}
+$('reopenCompletion').onclick=openCompletion;
+$('closeCompletion').onclick=()=>{if(!submitting)$('completionDialog').close();};
+$('completionDialog').addEventListener('cancel',event=>{if(submitting)event.preventDefault();});
+$('completionDialog').addEventListener('close',()=>{$('completionForm').reset();});
+for(const key of ['studentNumber','studentName'])$(key).addEventListener('input',refreshSubmission);
+$('resetLearning').onclick=()=>{
+ if(submitting)return;cancelSuccess();progress.reset();missionIndex=0;target=missions[0].target;
+ $('completionDialog').close();completionNotified=false;selectActivity(0);updateLearningStatus();
+};
+$('completionForm').addEventListener('submit',async event=>{
+ event.preventDefault();refreshSubmission();if($('sendCompletion').disabled)return;
+ const studentNumber=$('studentNumber').value.trim(),name=$('studentName').value.trim();
+ const attempt=progress.beginSubmission();submitting=true;refreshSubmission();$('submissionStatus').textContent='전송 중입니다. 서버의 저장 확인을 기다리고 있습니다.';
+ try{
+   await LabSubmission.sendCompletion({submissionId:attempt.id,submittedAt:attempt.submittedAt,studentNumber,name,result:{source:'browser-local-progress',complete:true,questions:18,missions:3}});
+   progress.confirmSubmission(attempt.id);$('completionForm').reset();
+ }catch(error){$('submissionStatus').textContent=error.message;}
+ finally{submitting=false;refreshSubmission();}
+});
+selectActivity(0);sync();resize();updateLearningStatus();

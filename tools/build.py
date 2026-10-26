@@ -12,6 +12,8 @@ def render():
     for filename, tag, old in [
         ('style.css', 'style', '<link rel="stylesheet" href="style.css">'),
         ('math.js', 'script', '<script src="math.js"></script>'),
+        ('progress.js', 'script', '<script src="progress.js"></script>'),
+        ('submission.js', 'script', '<script src="submission.js"></script>'),
         ('app.js', 'script', '<script src="app.js"></script>'),
     ]:
         source = (ROOT / filename).read_text(encoding='utf-8')
