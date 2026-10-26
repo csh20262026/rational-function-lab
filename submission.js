@@ -1,9 +1,9 @@
-/* Apps Script 제출 화면 연결 설정. 실제 웹앱 URL을 받은 뒤 url에 넣으세요.
+/* Apps Script 제출 화면 연결 설정. 교사가 제공한 웹앱 URL을 사용합니다.
  * 이 모듈은 화면만 엽니다. 학번·이름을 읽거나 전송 성공을 판정하지 않습니다.
  */
 (function(root){
  const config={
-   url:'',       // 교사의 https://script.google.com/macros/s/.../exec URL
+   url:'https://script.google.com/macros/s/AKfycby6pO3ZDO-pX4WTD7lJWeyYwmjN9QnIIEphnRzo0tBPrBjJa8LXpN_X-qfd50RRL1WDzQ/exec',       // 교사의 https://script.google.com/macros/s/.../exec URL
    embed:true    // iframe이 허용되지 않는 경우 false: 새 탭 방식만 사용
  };
  function webAppUrl(){

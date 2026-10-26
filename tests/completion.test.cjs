@@ -1,5 +1,7 @@
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
-const html=fs.readFileSync(path.join(__dirname,'../index.html'),'utf8');
+// Keep the unconfigured/offline test fixture separate from production settings.
+const configuredUrl=fs.readFileSync(path.join(__dirname,'../submission.js'),'utf8').match(/url:'([^']*)'/)[1];
+const html=fs.readFileSync(path.join(__dirname,'../index.html'),'utf8').replace(`url:'${configuredUrl}'`,"url:''");
 const MESSAGE='수고했습니다. 모든 활동이 완벽해요. 수학 선생님께 완료메세지를 보내기 위해 학번과 이름을 입력해주세요.';
 (async()=>{
  const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});

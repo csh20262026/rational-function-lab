@@ -83,4 +83,4 @@ Windows에서는 `python3` 대신 `py`를 사용할 수 있습니다. 바뀐 원
 
 완성 HTML 안에는 절대 경로로 된 CSS·JavaScript 주소가 없으므로 `/rational-function-lab/` 하위 경로에서도 작동합니다. 코드의 `http://www.w3.org/2000/svg`는 SVG 연결선의 네임스페이스 이름이며 네트워크로 라이브러리를 받는 주소가 아닙니다. Preview 파일이 아닌 최상위 `index.html`을 배포하세요.
 
-현재 버전의 제목은 **유리함수 그래프 탐구 초당LAB**입니다. 갱신 시 `progress.js`, `submission.js`와 생성된 `index.html`도 함께 반영하세요. Apps Script 제출 화면 URL은 비어 있습니다. submission.js의 config.url에 실제 /exec URL을 넣고 실행 HTML을 다시 생성하면 iframe 또는 새 탭으로 연결합니다. 학습 기록은 브라우저에 저장하고 학번·이름은 저장하지 않습니다. 자세한 내용은 [SUBMISSION_SETUP.md](SUBMISSION_SETUP.md)를 참고하세요.
+현재 버전의 제목은 **유리함수 그래프 탐구 초당LAB**입니다. 갱신 시 `progress.js`, `submission.js`와 생성된 `index.html`도 함께 반영하세요. 제공받은 Apps Script 제출 화면 /exec URL을 설정했습니다. submission.js의 config.url에 실제 /exec URL을 넣고 실행 HTML을 다시 생성하면 iframe 또는 새 탭으로 연결합니다. 학습 기록은 브라우저에 저장하고 학번·이름은 저장하지 않습니다. 자세한 내용은 [SUBMISSION_SETUP.md](SUBMISSION_SETUP.md)를 참고하세요.

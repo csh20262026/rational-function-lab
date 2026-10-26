@@ -3,7 +3,9 @@ const {chromium}=require('playwright');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
-const html=fs.readFileSync(path.join(__dirname,'../index.html'),'utf8');
+// Keep the unconfigured/offline test fixture separate from production settings.
+const configuredUrl=fs.readFileSync(path.join(__dirname,'../submission.js'),'utf8').match(/url:'([^']*)'/)[1];
+const html=fs.readFileSync(path.join(__dirname,'../index.html'),'utf8').replace(`url:'${configuredUrl}'`,"url:''");
 const screenshotDir=process.env.SCREENSHOT_DIR||'/tmp';
 
 const {checkLab}=require('./lab-checks.cjs');
