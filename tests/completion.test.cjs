@@ -4,16 +4,14 @@ const MESSAGE='수고했습니다. 모든 활동이 완벽해요. 수학 선생�
 (async()=>{
  const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
  try{
-  const context=await browser.newContext({viewport:{width:1280,height:1000}}),page=await context.newPage(),errors=[],sent=[];
-  page.on('pageerror',e=>errors.push(e.message));let backend='fail',pending;
-  await page.route('**/*',async route=>{
-   if(route.request().url().startsWith('https://lab.invalid/'))return route.fulfill({contentType:'text/html',body:html});
-   if(route.request().url()==='https://script.google.com/macros/s/TEST_ONLY/exec'){
-    const payload=JSON.parse(new URLSearchParams(route.request().postData()).get('payload'));sent.push(payload);
-    if(backend==='pending'){await new Promise(resolve=>{pending=resolve;});}
-    const body=backend==='malformed'?{ok:true}:backend==='mismatch'?{ok:true,submissionId:payload.submissionId,payloadHash:'wrong',receiptId:'mock'}:{ok:true,submissionId:payload.submissionId,payloadHash:payload.payloadHash,receiptId:'mock-only'};
-    return route.fulfill({status:backend==='fail'?500:200,contentType:'application/json',headers:{'access-control-allow-origin':'https://lab.invalid'},body:JSON.stringify(body)});
-   }
+  const context=await browser.newContext({viewport:{width:1280,height:1000}}),page=await context.newPage(),errors=[],requests=[];
+  page.on('pageerror',e=>errors.push(e.message));
+  let blocked=false;
+  const MOCK_URL='https://script.google.com/macros/s/TEST_ONLY/exec';
+  await context.route('**/*',async route=>{
+   const request=route.request();requests.push({url:request.url(),method:request.method(),referrer:request.headers()['referer']||''});
+   if(request.url().startsWith('https://lab.invalid/'))return route.fulfill({contentType:'text/html',body:html});
+   if(request.url()===MOCK_URL)return route.fulfill({status:200,contentType:'text/html',headers:blocked?{'x-frame-options':'DENY','content-security-policy':"frame-ancestors 'none'"}:{},body:`<!doctype html><html lang="ko"><meta charset="utf-8"><title>모의 Apps Script 제출 화면</title><link rel="icon" href="data:,"><h1>모의 제출 화면</h1><form id="mockForm"><label>학번 <input id="mockNumber" type="text" inputmode="numeric"></label><label>이름 <input id="mockName" type="text"></label><button>선생님께 전송</button></form><p id="mockResult"></p><script>document.getElementById('mockForm').onsubmit=e=>{e.preventDefault();document.getElementById('mockResult').textContent='모의 저장 확인';parent.postMessage({success:true,submitted:true},'*');};</script></html>`});
    throw new Error('Unexpected network destination in test');
   });
   await page.goto('https://lab.invalid/rational-function-lab/');
@@ -37,20 +35,34 @@ const MESSAGE='수고했습니다. 모든 활동이 완벽해요. 수학 선생�
   assert.ok((await page.locator('#learningProgress').textContent()).includes('17/18'));await page.reload();await activity(3);assert.equal(await page.locator('#missionChoices .mission-done').count(),3);
   await activity(2);await answer(2,'y ≠ 2');assert.ok(await page.locator('#completionDialog').isVisible());assert.equal(await page.locator('#completionMessage').textContent(),MESSAGE);
   assert.ok((await page.locator('#completionScope').textContent()).includes('서버에서 검증된 학습 결과가 아닙니다'));
-  await page.fill('#studentNumber','00123');await page.fill('#studentName','가나다');assert.equal(await page.locator('#studentNumber').inputValue(),'00123');assert.ok(await page.locator('#sendCompletion').isDisabled());assert.equal(sent.length,0);
+  assert.equal(await page.locator('#completionDialog input').count(),0);
+  assert.equal(await page.locator('#submissionFrameHost iframe').count(),0);
+  assert.equal(await page.locator('#openSubmissionNewTab').getAttribute('href'),null);
+  assert.equal(requests.filter(r=>r.url===MOCK_URL).length,0);
   const earned=JSON.parse(await page.evaluate(()=>localStorage.getItem(LabProgress.KEY)));
-  let stored=await page.evaluate(()=>localStorage.getItem(LabProgress.KEY));assert.ok(!stored.includes('00123')&&!stored.includes('가나다'));assert.ok(!page.url().includes('00123'));
-  await page.reload();assert.ok(await page.locator('#completionDialog').isVisible());assert.equal(await page.locator('#studentNumber').inputValue(),'');assert.equal(await page.locator('#studentName').inputValue(),'');
-  // Only tests set this mocked URL. The production config stays empty.
-  await page.evaluate(()=>{LabSubmission.config.url='https://script.google.com/macros/s/TEST_ONLY/exec';refreshSubmission();});
-  assert.ok(await page.locator('#sendCompletion').isDisabled());await page.fill('#studentNumber','00123');await page.fill('#studentName','abc');assert.ok(await page.locator('#sendCompletion').isDisabled());await page.fill('#studentName','가나다');assert.ok(await page.locator('#sendCompletion').isEnabled());
-  await page.locator('#sendCompletion').click();await page.waitForFunction(()=>!submitting);assert.ok((await page.locator('#submissionStatus').textContent()).includes('확인할 수 없습니다'));assert.ok(await page.locator('#sendCompletion').isEnabled());assert.equal(sent[0].studentNumber,'00123');
-  backend='malformed';await page.locator('#sendCompletion').click();await page.waitForFunction(()=>!submitting);assert.ok((await page.locator('#submissionStatus').textContent()).includes('저장 확인을 받지 못했습니다'));
-  backend='mismatch';await page.locator('#sendCompletion').click();await page.waitForFunction(()=>!submitting);assert.ok((await page.locator('#submissionStatus').textContent()).includes('저장 확인을 받지 못했습니다'));
-  backend='pending';await page.locator('#sendCompletion').click();await page.waitForFunction(()=>submitting);assert.ok(await page.locator('#sendCompletion').isDisabled());assert.ok(await page.locator('#studentNumber').isDisabled());await page.evaluate(()=>document.querySelector('#completionForm').dispatchEvent(new Event('submit',{cancelable:true})));assert.equal(sent.length,4);
-  backend='success';pending();await page.waitForFunction(()=>!submitting);assert.ok((await page.locator('#submissionStatus').textContent()).includes('서버의 저장 확인'));assert.ok(await page.locator('#sendCompletion').isDisabled());assert.equal(new Set(sent.map(p=>p.submissionId)).size,1);assert.equal(new Set(sent.map(p=>p.payloadHash)).size,1);
-  stored=await page.evaluate(()=>localStorage.getItem(LabProgress.KEY));assert.ok(!stored.includes('00123')&&!stored.includes('가나다'));await page.reload();assert.equal(await page.locator('#completionDialog').isVisible(),false);await page.locator('#reopenCompletion').click();assert.ok(await page.locator('#sendCompletion').isDisabled());
+  await page.reload();assert.ok(await page.locator('#completionDialog').isVisible());
+  for(const invalid of ['javascript:alert(1)','http://script.google.com/macros/s/TEST_ONLY/exec','https://example.com/exec',MOCK_URL+'?studentNumber=00123']){
+   await page.evaluate(url=>{LabSubmission.config.url=url;showSubmissionScreen();},invalid);
+   assert.equal(await page.locator('#submissionFrameHost iframe').count(),0);assert.equal(await page.locator('#openSubmissionNewTab').getAttribute('href'),null);
+  }
+  await page.evaluate(url=>{LabSubmission.config.url=url;showSubmissionScreen();},MOCK_URL);
+  const child=page.frameLocator('#submissionFrameHost iframe');await child.getByRole('heading',{name:'모의 제출 화면'}).waitFor();
+  assert.equal(await page.locator('#openSubmissionNewTab').getAttribute('href'),MOCK_URL);
+  assert.equal(await page.locator('#openSubmissionNewTab').getAttribute('rel'),'noopener noreferrer');
+  assert.equal(await page.locator('#submissionFrameHost iframe').getAttribute('referrerpolicy'),'no-referrer');
+  await child.locator('#mockNumber').fill('00123');await child.locator('#mockName').fill('가나다');await child.getByRole('button',{name:'선생님께 전송'}).click();
+  assert.equal(await child.locator('#mockNumber').inputValue(),'00123');assert.equal(await child.locator('#mockResult').textContent(),'모의 저장 확인');
+  assert.ok(!(await page.locator('#submissionStatus').textContent()).includes('성공'));assert.equal(await page.evaluate(()=>progress.submission()),null);
+  const stored=await page.evaluate(()=>localStorage.getItem(LabProgress.KEY));assert.ok(!stored.includes('00123')&&!stored.includes('가나다'));assert.ok(requests.every(r=>!r.url.includes('00123')&&!r.url.includes('%EA')));
+  // A genuine browser frame refusal must keep the safe top-level link usable.
+  await page.locator('#closeCompletion').click();assert.equal(await page.locator('#submissionFrameHost iframe').count(),0);blocked=true;const blockedRequest=page.waitForRequest(MOCK_URL),policyFailure=page.waitForEvent('console',{predicate:m=>/frame-ancestors|X-Frame-Options|Refused to frame/.test(m.text())});await page.locator('#reopenCompletion').click();await blockedRequest;await policyFailure;
+  assert.ok(await page.locator('#openSubmissionNewTab').isVisible());assert.ok(!(await page.locator('#submissionStatus').textContent()).includes('성공'));
+  await page.locator('#hideSubmissionFrame').click();assert.equal(await page.locator('#submissionFrameHost iframe').count(),0);
+  const newTabPromise=context.waitForEvent('page');await page.locator('#openSubmissionNewTab').click();const newTab=await newTabPromise;
+  await newTab.getByRole('heading',{name:'모의 제출 화면'}).waitFor();assert.equal(await newTab.evaluate(()=>window.opener),null);assert.equal(newTab.url(),MOCK_URL);await newTab.close();
+  blocked=false;await page.evaluate(()=>{LabSubmission.config.embed=false;showSubmissionScreen();});assert.equal(await page.locator('#submissionFrameHost iframe').count(),0);assert.equal(await page.locator('#openSubmissionNewTab').getAttribute('href'),MOCK_URL);
   await page.locator('#closeCompletion').click();await page.locator('#resetLearning').click();assert.ok((await page.locator('#learningProgress').textContent()).includes('0/18'));await page.reload();assert.equal(await page.locator('#completionDialog').isVisible(),false);
+  await page.evaluate(url=>{LabSubmission.config.url=url;openCompletion();},MOCK_URL);assert.equal(await page.locator('#completionDialog').isVisible(),false);assert.equal(await page.locator('#submissionFrameHost iframe').count(),0);
   // Restore the legitimately earned fixture but remove each required part.
   for(const missing of ['activity1','activity2','activity3','missionQuiz','mission']){
    const incomplete=JSON.parse(JSON.stringify(earned));incomplete.submission=null;
@@ -61,14 +73,11 @@ const MESSAGE='수고했습니다. 모든 활동이 완벽해요. 수학 선생�
   }
   // Final mission success must open the popup in the same input event.
   await activity(3);await page.locator('#missionChoices button').nth(2).click();await set('a',-6);await set('p',-1);assert.equal(await page.locator('#completionDialog').isVisible(),false);await set('q',2);assert.ok(await page.locator('#completionDialog').isVisible());
+  await page.evaluate(url=>{LabSubmission.config.url=url;showSubmissionScreen();},MOCK_URL);await page.frameLocator('#submissionFrameHost iframe').getByRole('heading',{name:'모의 제출 화면'}).waitFor();
+  assert.ok(requests.filter(r=>r.url===MOCK_URL).every(r=>r.referrer===''));
   await page.setViewportSize({width:390,height:844});await page.locator('#completionDialog').screenshot({path:'/tmp/lab-completion-mobile.png'});assert.ok(await page.evaluate(()=>{const r=document.querySelector('#completionDialog').getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight;}));
   await page.setViewportSize({width:1280,height:1000});await page.locator('#completionDialog').screenshot({path:'/tmp/lab-completion-desktop.png'});
-  // Simulated CORS failures and opaque responses never become success.
-  await page.evaluate(()=>{LabSubmission.config.url='https://script.google.com/macros/s/TEST_ONLY/exec';window.originalFetch=fetch;window.fetch=async()=>{throw new TypeError('Mock CORS failure');};refreshSubmission();});
-  await page.fill('#studentNumber','00123');await page.fill('#studentName','가나다');await page.locator('#sendCompletion').click();await page.waitForFunction(()=>!submitting);assert.ok((await page.locator('#submissionStatus').textContent()).includes('CORS'));
-  await page.evaluate(()=>{window.fetch=async()=>({ok:true,type:'opaque'});});await page.locator('#sendCompletion').click();await page.waitForFunction(()=>!submitting);assert.ok((await page.locator('#submissionStatus').textContent()).includes('확인할 수 없습니다'));assert.ok(await page.locator('#sendCompletion').isEnabled());
-  await page.evaluate(()=>{window.fetch=window.originalFetch;});
   assert.deepEqual(errors,[]);await context.close();
-  console.log('PASS: exact title/message, confirmed answers only, missing question blocks popup, 18+3 completion, persistence, leading zeros, no-URL disabled/no requests, retry and matching acknowledgment, in-flight/double-submit guards, no PII persisted, reset');
+  console.log('PASS: exact completion conditions and persistence; no URL/no network; validated iframe URL; blocked framing and noopener new-tab fallback; embed=false; cross-origin form isolated; no false success or PII storage; mobile popup and reset');
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

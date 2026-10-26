@@ -1,6 +1,6 @@
 # 유리함수 그래프 탐구 초당LAB
 
-고등학교 공통수학의 `y = a/(x-p) + q (a ≠ 0)`를 조작하는 한국어 웹앱입니다. HTML·CSS·JavaScript와 브라우저 기본 Canvas만 사용합니다. 외부 CDN과 로그인은 없습니다. 학습 완료 여부는 현재 브라우저에 저장하며 학번·이름은 저장하지 않습니다. Google Sheets 전송은 아직 연결하지 않았습니다.
+고등학교 공통수학의 `y = a/(x-p) + q (a ≠ 0)`를 조작하는 한국어 웹앱입니다. HTML·CSS·JavaScript와 브라우저 기본 Canvas만 사용합니다. 외부 CDN과 로그인은 없습니다. 학습 완료 여부는 현재 브라우저에 저장하며 학번·이름은 저장하지 않습니다. Google Apps Script의 기존 제출 화면을 여는 연결부를 준비했으며 실제 웹앱 URL은 아직 설정하지 않았습니다.
 
 ## 실행과 Preview
 
@@ -21,17 +21,19 @@ Windows에서는 `py -m http.server 8000`도 됩니다. 브라우저에서 `http
 
 화면에 “그래프를 준비하고 있습니다”가 계속 보이면 초기화가 완료되지 않은 상태입니다. 미리보기 자체에서 JavaScript 실행을 금지한 경우에는 일반 브라우저의 로컬 서버로 실행하세요.
 
-## 전체 완료와 전송 준비
+## 전체 완료 후 Apps Script 제출 화면
 
-모든 문항을 정답 확인하고 세 미션을 성공하면 요청된 완료 팝업이 자동으로 열립니다. 학번은 숫자 문자열로 처리해 앞자리 0을 보존하고, 이름은 한글로 입력합니다. 입력값은 저장하지 않습니다. 완료 판정은 브라우저 기록에 근거하며 서버에서 검증된 학습 결과가 아니라는 안내를 표시합니다.
+객관식 18문항을 정답 확인하고 그래프 미션 3개를 성공하면 완료 팝업이 자동으로 열립니다. 완료 판정은 현재 브라우저 기록에 근거한 학습 완료 확인이며, 서버가 검증한 학습 결과가 아님을 표시합니다.
 
-현재 전송 주소는 비어 있어 **입력이 유효해도 전송 버튼은 비활성화**됩니다. 실제 주소에 임의로 연결하지 않았습니다. 준비된 함수는 서버의 저장 확인 응답을 검증하고, 중복·전송 중 잠금·실패 재시도를 처리합니다. 실제 Apps Script 연결과 CORS 왕복 검증은 다음 단계입니다. 상세 저장 범위와 서버 응답 계약은 [SUBMISSION_SETUP.md](SUBMISSION_SETUP.md)를 참고하세요.
+`submission.js` 상단의 **config.url**에 교사의 Apps Script 웹앱 `/exec` URL을 넣으면 팝업 안에 기존 제출 화면을 iframe으로 엽니다. LAB 자체의 학번·이름 입력 폼과 직접 POST 전송은 제거했습니다. 기존 Apps Script의 입력·저장 기능을 그대로 사용하며, LAB은 개인정보를 읽거나 저장하지 않습니다. 실제 URL을 아직 받지 않아 현재는 빈 값이고 외부 요청은 하지 않습니다.
 
-같은 기기를 다른 학생이 사용할 때는 하단의 **학습 기록 초기화**를 누르고 시작하세요. 저장이 차단된 미리보기에서는 저장 불가 안내를 표시하며, 정상적인 GitHub Pages에서는 localStorage를 사용합니다.
+iframe이 보안 정책으로 차단되면 **새 탭에서 제출 화면 열기**를 사용합니다. 새 탭 버튼은 항상 함께 제공하며, `config.embed = false`로 새 탭만 사용하도록 설정할 수도 있습니다. 보안 정책을 우회하지 않으며, 화면 열기를 저장 성공으로 표시하지 않습니다. 저장 결과는 교사의 제출 페이지와 구글시트에서 확인합니다.
+
+연결 설정, 저장 범위, 보안 정책과 확인 절차는 [SUBMISSION_SETUP.md](SUBMISSION_SETUP.md)를 참고하세요. 같은 기기를 다른 학생이 사용할 때는 **학습 기록 초기화**를 누르세요.
 
 ```sh
 node tests/progress.test.cjs
-# Playwright·Chromium 필요, 외부 서버 없이 모의 응답으로 검사
+# Playwright·Chromium 필요. 외부 서버 없이 모의 iframe·차단 응답으로 검사
 node tests/completion.test.cjs
 ```
 
@@ -124,7 +126,7 @@ node tests/mission-layout.test.cjs
 | `style.css` | 색상, 글자 크기, 그래프·객관식 카드의 반응형 배치 |
 | `app.js` | `renderFormula`의 공통 세로 분수, `layoutLabels`의 배치, `activities`·`makeQuestions`의 활동과 문항, `missions`의 목표·진행 처리 |
 | `progress.js` | 개인정보 없는 완료 기록, 브라우저 저장·복원·초기화 |
-| `submission.js` | 비어 있는 전송 설정, 입력·CORS·응답 확인, 재시도용 전송 함수 |
+| `submission.js` | 실제 Apps Script URL을 넣는 config.url, iframe/새 탭 모드, 안전한 URL 검사 |
 | `math.js` | 기존 `A_VALUES`와 확장 `MISSION_A_VALUES`, 수식·좌표·가지 계산, `makeMission` 및 `checkMission` |
 | `index.html` | Preview·배포용 생성 파일 |
 | `tests/` | 수학·브라우저·미리보기 회귀 검사 |

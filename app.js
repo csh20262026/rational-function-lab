@@ -1,7 +1,7 @@
 const M=LabMath,$=id=>document.getElementById(id);
 let learningStorage=null;try{learningStorage=window.localStorage;}catch{}
 const progress=LabProgress.createStore(learningStorage);
-let completionNotified=false,submitting=false;
+let completionNotified=false;
 const missions=[
  {name:'기본',target:M.makeMission(-2,3,-1,5)},
  {name:'응용',target:M.makeMission(1,-2,3,-3)},
@@ -180,7 +180,7 @@ function renderMission(){
 $('checkMission').onclick=renderMission;
 $('showSolution').onclick=showSolution;
 $('nextMission').onclick=()=>{if(!$('nextMission').disabled)selectMission(missionIndex+1);};
-$('restartChallenge').onclick=()=>{if(submitting)return;cancelSuccess();progress.restartMissions();selectMission(0);updateLearningStatus();};
+$('restartChallenge').onclick=()=>{cancelSuccess();progress.restartMissions();selectMission(0);updateLearningStatus();};
 // Labels live in an overlay so their bounds can be measured and kept inside
 // the plot. Only annotations move; every mathematical coordinate stays fixed.
 let graphLabels=[],labelObstacles=[],curvePixels=[];
@@ -276,39 +276,52 @@ function updateLearningStatus(){
  [...$('activities').children].forEach((button,i)=>{button.classList.toggle('activity-complete',progress.activityDone(i));});
  $('reopenCompletion').hidden=!done;
  if(!done)completionNotified=false;
- if(done&&!completionNotified&&!progress.submission()?.confirmed){completionNotified=true;openCompletion();}
+ if(done&&!completionNotified){completionNotified=true;openCompletion();}
 }
-function refreshSubmission(){
- const sent=progress.submission()?.confirmed===true,configured=LabSubmission.isConfigured();
- const valid=LabSubmission.validIdentity($('studentNumber').value.trim(),$('studentName').value.trim());
- $('sendCompletion').disabled=!progress.allComplete()||!valid||!configured||submitting||sent;
- $('studentNumber').disabled=$('studentName').disabled=submitting||sent;
- $('closeCompletion').disabled=submitting;$('resetLearning').disabled=submitting;$('restartChallenge').disabled=submitting;
- if(sent)$('submissionStatus').textContent='서버의 저장 확인을 받은 제출입니다. 중복 전송하지 않습니다.';
- else if(!configured)$('submissionStatus').textContent='전송 연결 준비 중입니다. 선생님 전송 주소가 없어 전송할 수 없습니다. 학번과 이름은 저장되지 않습니다.';
+// This gate is for the current browser's learning record, not server proof.
+function clearSubmissionScreen(){
+ $('submissionFrameHost').replaceChildren();$('submissionFrameHost').hidden=true;
+ $('openSubmissionNewTab').removeAttribute('href');$('openSubmissionNewTab').setAttribute('aria-disabled','true');$('openSubmissionNewTab').tabIndex=-1;
+ $('hideSubmissionFrame').hidden=true;
+}
+function showSubmissionScreen(){
+ clearSubmissionScreen();
+ if(!progress.allComplete())return;
+ const url=LabSubmission.webAppUrl();
+ if(!url){
+   $('submissionStatus').textContent=LabSubmission.config.url?'제출 화면 주소를 확인해 주세요. 교사가 제공한 Apps Script 웹앱의 /exec 주소가 필요합니다.':'제출 화면 연결 준비 중입니다. 교사가 Apps Script 웹앱 URL을 설정하면 이곳에서 열 수 있습니다.';
+   return;
+ }
+ $('openSubmissionNewTab').href=url;$('openSubmissionNewTab').removeAttribute('aria-disabled');$('openSubmissionNewTab').tabIndex=0;
+ const frame=LabSubmission.createFrame();
+ if(frame){
+   $('submissionFrameHost').hidden=false;$('submissionFrameHost').append(frame);$('hideSubmissionFrame').hidden=false;
+   $('submissionStatus').textContent='아래 제출 화면에서 학번과 이름을 입력하세요. 화면이 비어 있거나 Google의 보안 정책으로 표시되지 않으면 새 탭에서 열어 주세요.';
+   // Cross-origin onload can also occur for a blocked frame. It is not a
+   // reliable load or save acknowledgment, so it never changes this status.
+   frame.addEventListener('error',()=>{
+     $('submissionStatus').textContent='제출 화면을 표시하지 못했습니다. 새 탭에서 제출 화면을 열어 주세요.';
+   });
+ }else{
+   $('submissionStatus').textContent='새 탭에서 제출 화면을 열고 학번과 이름을 입력하세요.';
+ }
 }
 function openCompletion(){
  if(!progress.allComplete())return;
- $('completionForm').reset();refreshSubmission();
- if(!$('completionDialog').open)$('completionDialog').showModal();
+ showSubmissionScreen();if(!$('completionDialog').open)$('completionDialog').showModal();
 }
 $('reopenCompletion').onclick=openCompletion;
-$('closeCompletion').onclick=()=>{if(!submitting)$('completionDialog').close();};
-$('completionDialog').addEventListener('cancel',event=>{if(submitting)event.preventDefault();});
-$('completionDialog').addEventListener('close',()=>{$('completionForm').reset();});
-for(const key of ['studentNumber','studentName'])$(key).addEventListener('input',refreshSubmission);
-$('resetLearning').onclick=()=>{
- if(submitting)return;cancelSuccess();progress.reset();missionIndex=0;target=missions[0].target;
- $('completionDialog').close();completionNotified=false;selectActivity(0);updateLearningStatus();
-};
-$('completionForm').addEventListener('submit',async event=>{
- event.preventDefault();refreshSubmission();if($('sendCompletion').disabled)return;
- const studentNumber=$('studentNumber').value.trim(),name=$('studentName').value.trim();
- const attempt=progress.beginSubmission();submitting=true;refreshSubmission();$('submissionStatus').textContent='전송 중입니다. 서버의 저장 확인을 기다리고 있습니다.';
- try{
-   await LabSubmission.sendCompletion({submissionId:attempt.id,submittedAt:attempt.submittedAt,studentNumber,name,result:{source:'browser-local-progress',complete:true,questions:18,missions:3}});
-   progress.confirmSubmission(attempt.id);$('completionForm').reset();
- }catch(error){$('submissionStatus').textContent=error.message;}
- finally{submitting=false;refreshSubmission();}
+$('closeCompletion').onclick=()=>{$('completionDialog').close();clearSubmissionScreen();};
+$('completionDialog').addEventListener('close',()=>{if(!$('completionDialog').open)clearSubmissionScreen();});
+$('openSubmissionNewTab').addEventListener('click',event=>{
+ if(!progress.allComplete()||!LabSubmission.isConfigured())event.preventDefault();
 });
+$('hideSubmissionFrame').onclick=()=>{
+ $('submissionFrameHost').replaceChildren();$('submissionFrameHost').hidden=true;$('hideSubmissionFrame').hidden=true;
+ $('submissionStatus').textContent='삽입 화면을 닫았습니다. 새 탭에서 제출 화면을 열어 주세요. 보안 정책은 우회하지 않습니다.';
+};
+$('resetLearning').onclick=()=>{
+ cancelSuccess();progress.reset();missionIndex=0;target=missions[0].target;
+ $('completionDialog').close();clearSubmissionScreen();completionNotified=false;selectActivity(0);updateLearningStatus();
+};
 selectActivity(0);sync();resize();updateLearningStatus();
